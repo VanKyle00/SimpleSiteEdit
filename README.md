@@ -147,7 +147,3 @@ Prototype. What's verified live so far:
 - **The `.simplesiteedit/` directory** in your site is regenerated on every run. Add it to `.gitignore`.
 - **PROJECTS-style 2D arrays** in vanilla-JS sites are flagged as "not editable" and listed in the summary; the CMS only sees flat object-array collections.
 - **Position-based cross-collection references** (e.g., a `link: { id: '0-0' }` pointer between arrays) are not rewritten on reorder/delete — you'd need to fix them by hand.
-
-## History: Sveltia backend
-
-An earlier version of SimpleSiteEdit supported a Sveltia CMS backend in addition to Lume. It was removed after end-to-end testing revealed that Sveltia's current local-edit mechanism is the browser File System Access API, not `decap-server`'s proxy — so the architecture SimpleSiteEdit was designed around (`local_backend: true` + decap-server) is silently ignored by Sveltia. The Lume path was always the verified one; the Sveltia path was never actually wired to anything real.
