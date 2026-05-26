@@ -91,4 +91,42 @@ describe('round-trip identity', () => {
       expect(result).toContain('function render() {\n  return TRACKS;\n}')
     })
   })
+
+  test('a standalone image-only paragraph round-trips byte-identical', () => {
+    withTmp((dir) => {
+      const para1 = 'Last quarter I made the case for ripping out our job runner.'
+      const image = '![inserted screenshot](/images/runner.png)'
+      const para2 = 'The new runner uses a single FIFO queue with no priorities.'
+      const original =
+        `const DEVBLOG = [{ body: [${JSON.stringify(para1)}, ${JSON.stringify(image)}, ${JSON.stringify(para2)}] }];\n`
+      const src = join(dir, 'app.js')
+      writeFileSync(src, original)
+      const shadowRoot = join(dir, '.SimpleSiteEdit', 'data')
+      const out = join(dir, 'out.js')
+
+      explode(src, shadowRoot)
+      inject(src, shadowRoot, out)
+
+      expect(readFileSync(out, 'utf8')).toBe(original)
+    })
+  })
+
+  test('an inline image inside a paragraph round-trips byte-identical', () => {
+    withTmp((dir) => {
+      const inlineParagraph =
+        'Here is the diagram ![architecture](/images/arch.svg) — note the new queue layer in the middle.'
+      const other = 'A short follow-up paragraph with no image at all in it.'
+      const original =
+        `const DEVBLOG = [{ body: [${JSON.stringify(inlineParagraph)}, ${JSON.stringify(other)}] }];\n`
+      const src = join(dir, 'app.js')
+      writeFileSync(src, original)
+      const shadowRoot = join(dir, '.SimpleSiteEdit', 'data')
+      const out = join(dir, 'out.js')
+
+      explode(src, shadowRoot)
+      inject(src, shadowRoot, out)
+
+      expect(readFileSync(out, 'utf8')).toBe(original)
+    })
+  })
 })
