@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, existsSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { lume } from './lume'
+import { lume, ensureImageStore } from './lume'
 import type { SiteIR } from '../ir/types'
 
 async function withTmp(fn: (dir: string) => Promise<void>) {
@@ -126,6 +126,242 @@ describe('lume.emitConfig', () => {
       // not the markdown-storage convention `content`.
       expect(code).toContain('body: markdown')
       expect(code).not.toContain('content: markdown')
+    })
+  })
+})
+
+describe('lume.emitConfig — image uploads', () => {
+  test('emits cms.upload when ir.imageRoot is set', async () => {
+    await withTmp(async (dir) => {
+      const ir: SiteIR = {
+        siteRoot: 'fixtures/jekyll-minimal',
+        ssg: 'jekyll',
+        notes: [],
+        collections: [],
+        imageRoot: { storeFsPath: 'assets/images', publicPath: '/assets/images/' },
+      }
+      await lume.emitConfig(ir, dir)
+      const code = readFileSync(join(dir, 'lume', '_cms.ts'), 'utf8')
+      expect(code).toContain('cms.upload(')
+      expect(code).toContain('"name": "images"')
+      expect(code).toContain('"store": "fs:assets/images"')
+      expect(code).toContain('"publicPath": "/assets/images/"')
+    })
+  })
+
+  test('omits cms.upload when ir.imageRoot is not set', async () => {
+    await withTmp(async (dir) => {
+      const ir: SiteIR = {
+        siteRoot: 'fixtures/jekyll-minimal',
+        ssg: 'jekyll',
+        notes: [],
+        collections: [],
+      }
+      await lume.emitConfig(ir, dir)
+      const code = readFileSync(join(dir, 'lume', '_cms.ts'), 'utf8')
+      expect(code).not.toContain('cms.upload(')
+    })
+  })
+
+  test('upload block is emitted before the first cms.collection', async () => {
+    await withTmp(async (dir) => {
+      const ir: SiteIR = {
+        siteRoot: 'fixtures/jekyll-minimal',
+        ssg: 'jekyll',
+        notes: [],
+        imageRoot: { storeFsPath: 'images', publicPath: '/images/' },
+        collections: [
+          {
+            name: 'posts',
+            label: 'Posts',
+            folder: '_posts',
+            format: 'markdown',
+            slugFrom: 'filename',
+            fields: [{ name: 'body', type: 'markdown', required: true }],
+          },
+        ],
+      }
+      await lume.emitConfig(ir, dir)
+      const code = readFileSync(join(dir, 'lume', '_cms.ts'), 'utf8')
+      const uploadIdx = code.indexOf('cms.upload(')
+      const collectionIdx = code.indexOf('cms.collection(')
+      expect(uploadIdx).toBeGreaterThan(-1)
+      expect(collectionIdx).toBeGreaterThan(-1)
+      expect(uploadIdx).toBeLessThan(collectionIdx)
+    })
+  })
+
+  test('forward-slashes storeFsPath in the emitted store argument', async () => {
+    await withTmp(async (dir) => {
+      const ir: SiteIR = {
+        siteRoot: 'C:/x',
+        ssg: 'jekyll',
+        notes: [],
+        collections: [],
+        imageRoot: { storeFsPath: 'static\\uploads', publicPath: '/uploads/' },
+      }
+      await lume.emitConfig(ir, dir)
+      const code = readFileSync(join(dir, 'lume', '_cms.ts'), 'utf8')
+      expect(code).toContain('"store": "fs:static/uploads"')
+      expect(code).not.toContain('static\\\\uploads')
+    })
+  })
+})
+
+describe('lume.emitConfig — markdown widget upload binding', () => {
+  test('markdown fields use object form with `upload: "images"` when imageRoot is set', async () => {
+    await withTmp(async (dir) => {
+      const ir: SiteIR = {
+        siteRoot: 'fixtures/jekyll-minimal',
+        ssg: 'jekyll',
+        notes: [],
+        imageRoot: { storeFsPath: 'images', publicPath: '/images/' },
+        collections: [
+          {
+            name: 'posts',
+            label: 'Posts',
+            folder: '_posts',
+            format: 'markdown',
+            slugFrom: 'filename',
+            fields: [{ name: 'body', type: 'markdown', required: true }],
+          },
+        ],
+      }
+      await lume.emitConfig(ir, dir)
+      const code = readFileSync(join(dir, 'lume', '_cms.ts'), 'utf8')
+      expect(code).toContain('"name": "content"')
+      expect(code).toContain('"type": "markdown"')
+      expect(code).toMatch(/"upload":\s*"images"/)
+      expect(code).not.toMatch(/"uploads":\s*"images"/)
+      expect(code).not.toContain('content: markdown')
+    })
+  })
+
+  test('markdown fields keep shorthand form when imageRoot is NOT set', async () => {
+    await withTmp(async (dir) => {
+      const ir: SiteIR = {
+        siteRoot: 'fixtures/jekyll-minimal',
+        ssg: 'jekyll',
+        notes: [],
+        collections: [
+          {
+            name: 'posts',
+            label: 'Posts',
+            folder: '_posts',
+            format: 'markdown',
+            slugFrom: 'filename',
+            fields: [{ name: 'body', type: 'markdown', required: true }],
+          },
+        ],
+      }
+      await lume.emitConfig(ir, dir)
+      const code = readFileSync(join(dir, 'lume', '_cms.ts'), 'utf8')
+      expect(code).toContain('content: markdown')
+      expect(code).not.toMatch(/"upload":\s*"images"/)
+    })
+  })
+
+  test('non-markdown fields keep shorthand form even when imageRoot is set', async () => {
+    await withTmp(async (dir) => {
+      const ir: SiteIR = {
+        siteRoot: 'fixtures/jekyll-minimal',
+        ssg: 'jekyll',
+        notes: [],
+        imageRoot: { storeFsPath: 'images', publicPath: '/images/' },
+        collections: [
+          {
+            name: 'posts',
+            label: 'Posts',
+            folder: '_posts',
+            format: 'markdown',
+            slugFrom: 'filename',
+            fields: [
+              { name: 'title', type: 'string', required: true },
+              { name: 'body', type: 'markdown', required: true },
+            ],
+          },
+        ],
+      }
+      await lume.emitConfig(ir, dir)
+      const code = readFileSync(join(dir, 'lume', '_cms.ts'), 'utf8')
+      expect(code).toContain('title: text')
+    })
+  })
+
+  test('on JSON-format collections (js-literals), body keeps name `body` and gets upload binding', async () => {
+    await withTmp(async (dir) => {
+      const ir: SiteIR = {
+        siteRoot: 'C:/Users/Administrator/portfolio',
+        ssg: 'js-literals',
+        jsSource: 'C:/Users/Administrator/portfolio/app.js',
+        notes: [],
+        imageRoot: { storeFsPath: 'images', publicPath: '/images/' },
+        collections: [
+          {
+            name: 'DEVBLOG',
+            label: 'Devblog',
+            folder: '.simplesiteedit/data/DEVBLOG',
+            format: 'json',
+            slugFrom: 'filename',
+            jsBinding: 'DEVBLOG',
+            fields: [
+              { name: 'body', type: 'markdown', required: true },
+            ],
+          },
+        ],
+      }
+      await lume.emitConfig(ir, dir)
+      const code = readFileSync(join(dir, 'lume', '_cms.ts'), 'utf8')
+      expect(code).toContain('"name": "body"')
+      expect(code).not.toContain('"name": "content"')
+      expect(code).toMatch(/"upload":\s*"images"/)
+    })
+  })
+})
+
+describe('ensureImageStore', () => {
+  test('creates the image store directory when missing', async () => {
+    await withTmp(async (dir) => {
+      const ir: SiteIR = {
+        siteRoot: dir,
+        ssg: 'jekyll',
+        notes: [],
+        collections: [],
+        imageRoot: { storeFsPath: 'static/uploads', publicPath: '/uploads/' },
+      }
+      ensureImageStore(ir)
+      const created = join(dir, 'static', 'uploads')
+      expect(existsSync(created)).toBe(true)
+      expect(statSync(created).isDirectory()).toBe(true)
+    })
+  })
+
+  test('is a no-op when imageRoot is not set', async () => {
+    await withTmp(async (dir) => {
+      const ir: SiteIR = {
+        siteRoot: dir,
+        ssg: 'jekyll',
+        notes: [],
+        collections: [],
+      }
+      ensureImageStore(ir)
+      expect(existsSync(join(dir, 'images'))).toBe(false)
+    })
+  })
+
+  test('is idempotent when the directory already exists', async () => {
+    await withTmp(async (dir) => {
+      mkdirSync(join(dir, 'images'))
+      const ir: SiteIR = {
+        siteRoot: dir,
+        ssg: 'jekyll',
+        notes: [],
+        collections: [],
+        imageRoot: { storeFsPath: 'images', publicPath: '/images/' },
+      }
+      ensureImageStore(ir)
+      ensureImageStore(ir)
+      expect(existsSync(join(dir, 'images'))).toBe(true)
     })
   })
 })

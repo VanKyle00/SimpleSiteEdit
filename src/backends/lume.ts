@@ -35,6 +35,18 @@ export const lume: BackendAdapter = {
     lines.push(`cms.storage("fs", ${JSON.stringify(fromLumeDirToSite)});`)
     lines.push(``)
 
+    if (ir.imageRoot) {
+      const storeRel = toForwardSlashes(ir.imageRoot.storeFsPath)
+      lines.push(
+        `cms.upload(${JSON.stringify({
+          name: 'images',
+          store: `fs:${storeRel}`,
+          publicPath: ir.imageRoot.publicPath,
+        }, null, 2)});`,
+      )
+      lines.push(``)
+    }
+
     for (const c of ir.collections) {
       const globPattern = collectionGlob(c)
       // Lume's `body → content` convention applies only to markdown-family files,
@@ -46,6 +58,12 @@ export const lume: BackendAdapter = {
           const name = usesMdBodyConvention && f.type === 'markdown' && f.name === 'body'
             ? 'content'
             : f.name
+          // Markdown fields use the explicit object form with `upload` binding
+          // (singular, per Lume v0.15.5) so the widget's image button writes
+          // to the registered "images" upload regardless of insertion order.
+          if (f.type === 'markdown' && ir.imageRoot) {
+            return `  ${JSON.stringify({ name, type: 'markdown', upload: 'images' }, null, 2)}`
+          }
           return `  ${JSON.stringify(`${name}: ${fieldTypeToLumeWidget(f.type)}`)}`
         })
         .join(',\n')
@@ -79,6 +97,7 @@ export const lume: BackendAdapter = {
       )
     }
 
+    ensureImageStore(ir)
     const proc = spawnDeno(cmsPath, lumeDir)
     const url = `http://localhost:${LUME_SERVE_PORT}/`
 
@@ -91,6 +110,12 @@ export const lume: BackendAdapter = {
       },
     }
   },
+}
+
+export function ensureImageStore(ir: SiteIR): void {
+  if (!ir.imageRoot) return
+  const abs = resolve(ir.siteRoot, ir.imageRoot.storeFsPath)
+  mkdirSync(abs, { recursive: true })
 }
 
 function collectionGlob(c: Collection): string {
