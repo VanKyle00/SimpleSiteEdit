@@ -11,13 +11,14 @@ type Io = {
 }
 
 const USAGE =
-  'usage: simplesiteedit <site-path> [--dry-run] [--no-open] [--backend lume] [--persist] [--force]\n'
+  'usage: simplesiteedit <site-path> [--dry-run] [--no-open] [--backend lume] [--images <path>] [--persist] [--force]\n'
 
 export async function runCli(argv: string[], io: Io): Promise<number> {
   const writeErr = io.writeErr ?? io.write
   const positional: string[] = []
   const flags = new Set<string>()
   let preferredBackend: 'lume' | undefined
+  let imagesOverride: string | undefined
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -29,6 +30,14 @@ export async function runCli(argv: string[], io: Io): Promise<number> {
         return 2
       }
       preferredBackend = v
+    } else if (arg === '--images') {
+      const v = argv[++i]
+      if (v === undefined) {
+        writeErr('--images requires a path argument\n')
+        writeErr(USAGE)
+        return 2
+      }
+      imagesOverride = v
     } else if (arg.startsWith('--')) {
       flags.add(arg)
     } else {
@@ -42,7 +51,7 @@ export async function runCli(argv: string[], io: Io): Promise<number> {
   }
 
   const sitePath = positional[0]
-  const ir = await buildIR(sitePath)
+  const ir = await buildIR(sitePath, { imagesOverride })
 
   if (flags.has('--dry-run')) {
     io.write(JSON.stringify(ir, null, 2) + '\n')
