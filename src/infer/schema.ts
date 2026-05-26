@@ -76,7 +76,10 @@ function inferType(key: string, value: unknown): FieldType {
   if (value === null || value === undefined) return 'unknown'
   if (value instanceof Date) return 'datetime'
   if (typeof value === 'boolean') return 'boolean'
-  if (Array.isArray(value)) return 'list'
+  if (Array.isArray(value)) {
+    if (isProseArray(value)) return 'markdown'
+    return 'list'
+  }
   if (typeof value === 'string') {
     if (isIsoDate(value)) return 'datetime'
     if (isImagePath(key, value)) return 'image'
@@ -84,6 +87,21 @@ function inferType(key: string, value: unknown): FieldType {
   }
   if (typeof value === 'number') return 'string'
   return 'unknown'
+}
+
+/**
+ * True when an array looks like a sequence of prose paragraphs (a blog body
+ * stored as `body: ['para1', 'para2', ...]`) rather than a list of tags.
+ *
+ * Heuristic: every element is a string of at least 40 chars containing whitespace.
+ * Tag-shaped arrays like `['intro', 'follow-up']` don't qualify.
+ */
+export function isProseArray(value: unknown): value is string[] {
+  if (!Array.isArray(value)) return false
+  if (value.length === 0) return false
+  return value.every(
+    (el) => typeof el === 'string' && el.length >= 40 && /\s/.test(el),
+  )
 }
 
 function isIsoDate(s: string): boolean {

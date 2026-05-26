@@ -37,11 +37,15 @@ export const lume: BackendAdapter = {
 
     for (const c of ir.collections) {
       const globPattern = collectionGlob(c)
+      // Lume's `body → content` convention applies only to markdown-family files,
+      // where the storage layer extracts the markdown body into `entry.content`.
+      // JSON-backed collections (js-literals) keep whatever key the source uses.
+      const usesMdBodyConvention = c.format === 'markdown' || c.format === 'mdx'
       const fields = c.fields
         .map((f) => {
-          // Lume's convention: the markdown body is the field named "content".
-          // Our IR uses "body" (Decap convention); rename when targeting Lume.
-          const name = f.type === 'markdown' && f.name === 'body' ? 'content' : f.name
+          const name = usesMdBodyConvention && f.type === 'markdown' && f.name === 'body'
+            ? 'content'
+            : f.name
           return `  ${JSON.stringify(`${name}: ${fieldTypeToLumeWidget(f.type)}`)}`
         })
         .join(',\n')

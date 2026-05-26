@@ -38,6 +38,26 @@ describe('round-trip identity', () => {
     })
   })
 
+  test('paragraph-array survives explode → no-edit inject (joined in shadow, split back to array)', () => {
+    withTmp((dir) => {
+      const para1 = 'Last quarter I made the case for ripping out our job runner.'
+      const para2 = 'The old runner used a priority queue with five tiers.'
+      const original =
+        `const DEVBLOG = [{ body: [${JSON.stringify(para1)}, ${JSON.stringify(para2)}] }];\n`
+      const src = join(dir, 'app.js')
+      writeFileSync(src, original)
+      const shadowRoot = join(dir, '.SimpleSiteEdit', 'data')
+      const out = join(dir, 'out.js')
+
+      explode(src, shadowRoot)
+      // Shadow JSON should contain the joined string (verified in explode.test.ts).
+      inject(src, shadowRoot, out)
+
+      // With no edits in the shadow, inject must leave the source byte-identical.
+      expect(readFileSync(out, 'utf8')).toBe(original)
+    })
+  })
+
   test('modifying a shadow entry preserves the rest of the file verbatim', () => {
     withTmp((dir) => {
       const original =

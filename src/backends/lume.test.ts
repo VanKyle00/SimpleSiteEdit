@@ -97,4 +97,35 @@ describe('lume.emitConfig', () => {
       expect(code).toContain('.simplesiteedit/data/DEVBLOG/*.json')
     })
   })
+
+  test('keeps the body field name on a json-format collection (no body→content rename)', async () => {
+    await withTmp(async (dir) => {
+      const ir: SiteIR = {
+        siteRoot: 'C:/Users/Administrator/portfolio',
+        ssg: 'js-literals',
+        jsSource: 'C:/Users/Administrator/portfolio/app.js',
+        notes: [],
+        collections: [
+          {
+            name: 'DEVBLOG',
+            label: 'Devblog',
+            folder: '.simplesiteedit/data/DEVBLOG',
+            format: 'json',
+            slugFrom: 'filename',
+            jsBinding: 'DEVBLOG',
+            fields: [
+              { name: 'title', type: 'string', required: true },
+              { name: 'body', type: 'markdown', required: true },
+            ],
+          },
+        ],
+      }
+      await lume.emitConfig(ir, dir)
+      const code = readFileSync(join(dir, 'lume', '_cms.ts'), 'utf8')
+      // For json-format collections, the JSON key is literal — Lume must see `body`,
+      // not the markdown-storage convention `content`.
+      expect(code).toContain('body: markdown')
+      expect(code).not.toContain('content: markdown')
+    })
+  })
 })

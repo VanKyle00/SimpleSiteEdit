@@ -2,6 +2,7 @@ import { parse } from '@babel/parser'
 import type { Node, ObjectExpression, ArrayExpression } from '@babel/types'
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { isProseArray } from '../infer/schema.ts'
 
 export function explode(srcPath: string, shadowRoot: string): void {
   const source = readFileSync(srcPath, 'utf8')
@@ -11,9 +12,30 @@ export function explode(srcPath: string, shadowRoot: string): void {
     mkdirSync(dir, { recursive: true })
     entries.forEach((entry, i) => {
       const filename = String(i + 1).padStart(4, '0') + '.json'
-      writeFileSync(join(dir, filename), JSON.stringify(entry, null, 2) + '\n')
+      const transformed = coalesceProse(entry)
+      writeFileSync(join(dir, filename), JSON.stringify(transformed, null, 2) + '\n')
     })
   }
+}
+
+/**
+ * Recursively walk a value; replace any prose-array field with a single string
+ * joined by blank lines. Lume CMS can then render the field as a markdown editor
+ * instead of a row-per-paragraph list.
+ */
+function coalesceProse(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    if (isProseArray(value)) return value.join('\n\n')
+    return value.map(coalesceProse)
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = coalesceProse(v)
+    }
+    return out
+  }
+  return value
 }
 
 export function parseLiterals(source: string): Map<string, unknown[]> {

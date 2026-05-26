@@ -14,6 +14,43 @@ describe('inferSchemaFromSamples (js-literals / json)', () => {
     expect(byName.featured).toMatchObject({ type: 'boolean', required: true })
     expect(byName.num).toMatchObject({ type: 'string', required: true })
   })
+
+  test('treats an array of prose paragraphs as markdown, not list', () => {
+    const samples = [
+      {
+        title: 'A devblog entry',
+        tags: ['scheduling', 'rust', 'audio'],
+        body: [
+          'Last quarter I made the case for ripping out our job runner and replacing it with something built around explicit deadlines.',
+          'The old runner used a priority queue with five tiers; in practice the queue was almost always saturated with tier-3 work.',
+        ],
+      },
+    ]
+    const fields = inferSchemaFromSamples(samples)
+    const byName = Object.fromEntries(fields.map((f) => [f.name, f]))
+    expect(byName.body).toMatchObject({ type: 'markdown' })
+    // Tags are short strings — they remain a list.
+    expect(byName.tags).toMatchObject({ type: 'list' })
+  })
+
+  test('short-string arrays stay as list (tags are not prose)', () => {
+    const samples = [{ tags: ['intro', 'follow-up'] }]
+    const fields = inferSchemaFromSamples(samples)
+    expect(fields[0]).toMatchObject({ name: 'tags', type: 'list' })
+  })
+
+  test('arrays with any non-string element stay as list', () => {
+    const samples = [
+      {
+        mixed: [
+          'A long enough string that would otherwise qualify as prose on its own.',
+          42,
+        ],
+      },
+    ]
+    const fields = inferSchemaFromSamples(samples)
+    expect(fields[0]).toMatchObject({ name: 'mixed', type: 'list' })
+  })
 })
 
 describe('inferSchema (markdown collection)', () => {

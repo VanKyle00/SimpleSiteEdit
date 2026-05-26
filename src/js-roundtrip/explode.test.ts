@@ -55,4 +55,34 @@ describe('explode', () => {
       expect(second).toEqual({ title: 'second' })
     })
   })
+
+  test('joins a paragraph-array field into a single blank-line-separated string', () => {
+    withTmp((dir) => {
+      const src = join(dir, 'app.js')
+      const para1 = 'Last quarter I made the case for ripping out our job runner.'
+      const para2 = 'The old runner used a priority queue with five tiers.'
+      writeFileSync(
+        src,
+        `const DEVBLOG = [{ title: 'x', body: [${JSON.stringify(para1)}, ${JSON.stringify(para2)}] }]`,
+      )
+      const shadowRoot = join(dir, '.SimpleSiteEdit', 'data')
+      explode(src, shadowRoot)
+
+      const entry = JSON.parse(readFileSync(join(shadowRoot, 'DEVBLOG', '0001.json'), 'utf8'))
+      expect(entry.body).toBe(`${para1}\n\n${para2}`)
+      expect(entry.title).toBe('x')
+    })
+  })
+
+  test('leaves short-string arrays (tags) untouched in shadow JSON', () => {
+    withTmp((dir) => {
+      const src = join(dir, 'app.js')
+      writeFileSync(src, `const POSTS = [{ tags: ['intro', 'follow-up'] }]`)
+      const shadowRoot = join(dir, '.SimpleSiteEdit', 'data')
+      explode(src, shadowRoot)
+
+      const entry = JSON.parse(readFileSync(join(shadowRoot, 'POSTS', '0001.json'), 'utf8'))
+      expect(entry.tags).toEqual(['intro', 'follow-up'])
+    })
+  })
 })

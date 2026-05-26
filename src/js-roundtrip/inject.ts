@@ -18,16 +18,75 @@ export function inject(srcPath: string, shadowRoot: string, outPath: string): vo
       const dir = join(shadowRoot, name)
       if (!existsSync(dir) || !statSync(dir).isDirectory()) continue
 
+      const paragraphFields = detectParagraphArrayFields(decl.init)
       const shadowEntries = readShadowEntries(dir)
+      const shadowInSourceForm = shadowEntries.map((e) =>
+        splitParagraphFields(e, paragraphFields),
+      )
       const currentEntries = arrayExprToValues(decl.init)
-      if (deepEqual(shadowEntries, currentEntries)) continue
+      if (deepEqual(shadowInSourceForm, currentEntries)) continue
 
-      decl.init = valuesToArrayExpr(shadowEntries)
+      decl.init = valuesToArrayExpr(shadowInSourceForm)
     }
   }
 
   const output = recast.print(ast, { lineTerminator }).code
   writeFileSync(outPath, output)
+}
+
+/**
+ * Inspect the source array's entries and return the set of property names that
+ * are paragraph-arrays (array of long prose strings). On inject these get
+ * spliced back together from the shadow's joined-string form.
+ */
+function detectParagraphArrayFields(initExpr: any): Set<string> {
+  const fields = new Set<string>()
+  if (!initExpr || initExpr.type !== 'ArrayExpression') return fields
+  for (const el of initExpr.elements) {
+    if (!el || el.type !== 'ObjectExpression') continue
+    for (const prop of el.properties) {
+      if (prop.type !== 'ObjectProperty') continue
+      const key =
+        prop.key.type === 'Identifier'
+          ? prop.key.name
+          : prop.key.type === 'StringLiteral'
+            ? prop.key.value
+            : null
+      if (key === null) continue
+      if (isAstParagraphArray(prop.value)) fields.add(key)
+    }
+  }
+  return fields
+}
+
+function isAstParagraphArray(node: any): boolean {
+  if (!node || node.type !== 'ArrayExpression') return false
+  if (node.elements.length === 0) return false
+  return node.elements.every(
+    (el: any) =>
+      el &&
+      el.type === 'StringLiteral' &&
+      typeof el.value === 'string' &&
+      el.value.length >= 40 &&
+      /\s/.test(el.value),
+  )
+}
+
+function splitParagraphFields(entry: unknown, fields: Set<string>): unknown {
+  if (fields.size === 0) return entry
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(entry as Record<string, unknown>)) {
+    if (fields.has(k) && typeof v === 'string') {
+      // Split on blank lines (markdown paragraph boundary). Lume on Windows may
+      // write CRLF, so accept both. The split is the exact inverse of explode's
+      // `arr.join('\n\n')` so no-edit round-trips stay byte-identical.
+      out[k] = v === '' ? [] : v.split(/\r?\n\r?\n/)
+    } else {
+      out[k] = v
+    }
+  }
+  return out
 }
 
 function readShadowEntries(dir: string): unknown[] {
