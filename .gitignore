@@ -1,4 +1,5 @@
 node_modules/
 .simplesiteedit/
 dist/
+docs/
 *.log
