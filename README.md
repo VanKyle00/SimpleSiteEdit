@@ -81,6 +81,20 @@ When you do launch the editor (`Start SimpleSiteEdit.bat` on Windows, or the CLI
 - `--backend lume` — explicit backend selection. Currently `lume` is the only option; the flag exists for forward compatibility.
 - `--persist` — write Lume's `lume/_cms.ts` config to the site root instead of `.simplesiteedit/`. Useful if you want to commit the config and run Lume CMS directly (without `SimpleSiteEdit`). Refused on js-literals sites — the shadow dir is intrinsic to the round-trip and can't be persisted meaningfully. Refused if a target file already exists; pass `--force` to overwrite.
 - `--force` — allow `--persist` to overwrite existing config files.
+- `--images <path>` — override the auto-detected image upload folder. `<path>` is absolute or relative to the site root. The URL prefix inserted by the markdown widget is derived from `<path>`: `static/<x>` and `public/<x>` become `/<x>/`; anything else becomes `/<path>/`.
+
+### Inserting images into markdown bodies
+
+The markdown editor in Lume CMS has an image-insert button. SimpleSiteEdit auto-detects where uploaded images should land by checking, in order:
+
+| Folder            | Public URL prefix    | Convention           |
+|-------------------|----------------------|----------------------|
+| `assets/images/`  | `/assets/images/`    | Jekyll               |
+| `static/images/`  | `/images/`           | Hugo                 |
+| `public/images/`  | `/images/`           | Next.js / Astro      |
+| `images/`         | `/images/`           | generic / JS-literal |
+
+If none exist, SimpleSiteEdit falls back to `<siteRoot>/images/` and creates it on launch. Override with `--images <path>` for non-standard layouts (e.g. Astro's `src/assets/`, Hugo page bundles, Eleventy with custom passthrough config).
 
 ## How vanilla-JS sites work (the round-trip)
 
@@ -147,3 +161,4 @@ Prototype. What's verified live so far:
 - **The `.simplesiteedit/` directory** in your site is regenerated on every run. Add it to `.gitignore`.
 - **PROJECTS-style 2D arrays** in vanilla-JS sites are flagged as "not editable" and listed in the summary; the CMS only sees flat object-array collections.
 - **Position-based cross-collection references** (e.g., a `link: { id: '0-0' }` pointer between arrays) are not rewritten on reorder/delete — you'd need to fix them by hand.
+- **The markdown widget's image button** uploads to the detected (or `--images`-overridden) folder, and the URL inserted into the markdown body is built from the matching public path. For JS-literal devblog bodies, an image-only line becomes its own paragraph entry; an inline image stays inside its paragraph string. Both round-trip byte-identical with no edits.
