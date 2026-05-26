@@ -1,5 +1,8 @@
 import { describe, test, expect } from 'vitest'
-import { publicPathFor } from './images'
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { publicPathFor, inferImageRoot } from './images'
 
 describe('publicPathFor', () => {
   test('strips static/ prefix (Hugo convention)', () => {
@@ -30,5 +33,79 @@ describe('publicPathFor', () => {
   test('normalizes backslashes to forward slashes', () => {
     expect(publicPathFor('static\\images')).toBe('/images/')
     expect(publicPathFor('assets\\images')).toBe('/assets/images/')
+  })
+})
+
+function withTmp(fn: (dir: string) => void) {
+  const dir = mkdtempSync(join(tmpdir(), 'simplesiteedit-images-'))
+  try {
+    fn(dir)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+describe('inferImageRoot', () => {
+  test('detects assets/images/ (Jekyll)', () => {
+    withTmp((dir) => {
+      mkdirSync(join(dir, 'assets', 'images'), { recursive: true })
+      const r = inferImageRoot(dir)
+      expect(r.storeFsPath).toBe('assets/images')
+      expect(r.publicPath).toBe('/assets/images/')
+    })
+  })
+
+  test('detects static/images/ (Hugo)', () => {
+    withTmp((dir) => {
+      mkdirSync(join(dir, 'static', 'images'), { recursive: true })
+      const r = inferImageRoot(dir)
+      expect(r.storeFsPath).toBe('static/images')
+      expect(r.publicPath).toBe('/images/')
+    })
+  })
+
+  test('detects public/images/ (Next.js / Astro)', () => {
+    withTmp((dir) => {
+      mkdirSync(join(dir, 'public', 'images'), { recursive: true })
+      const r = inferImageRoot(dir)
+      expect(r.storeFsPath).toBe('public/images')
+      expect(r.publicPath).toBe('/images/')
+    })
+  })
+
+  test('detects images/ at the root', () => {
+    withTmp((dir) => {
+      mkdirSync(join(dir, 'images'))
+      const r = inferImageRoot(dir)
+      expect(r.storeFsPath).toBe('images')
+      expect(r.publicPath).toBe('/images/')
+    })
+  })
+
+  test('falls back to images/ when nothing is present', () => {
+    withTmp((dir) => {
+      const r = inferImageRoot(dir)
+      expect(r.storeFsPath).toBe('images')
+      expect(r.publicPath).toBe('/images/')
+    })
+  })
+
+  test('priority: assets/images beats images/ if both exist', () => {
+    withTmp((dir) => {
+      mkdirSync(join(dir, 'images'))
+      mkdirSync(join(dir, 'assets', 'images'), { recursive: true })
+      const r = inferImageRoot(dir)
+      expect(r.storeFsPath).toBe('assets/images')
+    })
+  })
+
+  test('priority: static/images beats public/images and images/', () => {
+    withTmp((dir) => {
+      mkdirSync(join(dir, 'images'))
+      mkdirSync(join(dir, 'public', 'images'), { recursive: true })
+      mkdirSync(join(dir, 'static', 'images'), { recursive: true })
+      const r = inferImageRoot(dir)
+      expect(r.storeFsPath).toBe('static/images')
+    })
   })
 })
