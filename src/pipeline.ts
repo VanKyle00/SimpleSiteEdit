@@ -8,6 +8,7 @@ import { detect as detectJsLiterals } from './detect/js-literals.ts'
 import { detect as detectGeneric } from './detect/generic.ts'
 import { inferCollections } from './infer/collections.ts'
 import { inferSchema, inferSchemaFromSamples } from './infer/schema.ts'
+import { inferImageRoot } from './infer/images.ts'
 
 // Real-SSG detectors first; js-literals + generic last (fallbacks).
 const detectors: Array<(root: string) => Promise<SiteInfo | null>> = [
@@ -28,7 +29,13 @@ export async function buildIR(root: string): Promise<SiteIR> {
   }
 
   if (!info) {
-    return { siteRoot: root, ssg: 'generic', collections: [], notes: [] }
+    return {
+      siteRoot: root,
+      ssg: 'generic',
+      collections: [],
+      notes: [],
+      imageRoot: inferImageRoot(root),
+    }
   }
 
   const { stubs, notes } = await inferCollections(info)
@@ -50,5 +57,6 @@ export async function buildIR(root: string): Promise<SiteIR> {
 
   const ir: SiteIR = { siteRoot: root, ssg: info.ssg, collections, notes }
   if (info.jsSource) ir.jsSource = info.jsSource
+  ir.imageRoot = inferImageRoot(root)
   return ir
 }

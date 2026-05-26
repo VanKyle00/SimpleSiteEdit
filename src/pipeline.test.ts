@@ -45,6 +45,30 @@ describe('buildIR', () => {
     expect(ir.notes.join(' ')).toMatch(/VIEWS/)
   })
 
+  test('attaches imageRoot inferred from the site layout', async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const dir = mkdtempSync(join(tmpdir(), 'simplesiteedit-pipeline-img-'))
+    try {
+      writeFileSync(join(dir, '_config.yml'), '')
+      mkdirSync(join(dir, '_posts'))
+      writeFileSync(
+        join(dir, '_posts', '2026-05-25-hello.md'),
+        '---\ntitle: Hi\ndate: 2026-05-25\n---\nbody',
+      )
+      mkdirSync(join(dir, 'assets', 'images'), { recursive: true })
+
+      const ir = await buildIR(dir)
+      expect(ir.imageRoot).toEqual({
+        storeFsPath: 'assets/images',
+        publicPath: '/assets/images/',
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   test.each([
     { ssg: 'hugo',     fixture: 'fixtures/hugo-minimal',     postsFolder: 'content/posts',    format: 'markdown' },
     { ssg: 'eleventy', fixture: 'fixtures/eleventy-minimal', postsFolder: 'posts',            format: 'markdown' },

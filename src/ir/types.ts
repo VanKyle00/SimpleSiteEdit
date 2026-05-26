@@ -41,6 +41,7 @@ export type SiteIR = {
   collections: Collection[]
   jsSource?: string
   notes: string[]
+  imageRoot?: { storeFsPath: string; publicPath: string }
 }
 
 export type SiteInfo = {
