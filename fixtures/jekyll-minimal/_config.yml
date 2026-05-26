@@ -1,0 +1,4 @@
+title: A Tiny Jekyll Site
+description: Fixture used by SimpleSiteEdit's tests
+url: https://example.com
+permalink: /:year/:month/:title/

@@ -1,0 +1,6 @@
+baseURL = "https://example.com"
+title = "A Tiny Hugo Site"
+theme = "stub"
+
+[params]
+description = "Fixture used by SimpleSiteEdit's tests"
